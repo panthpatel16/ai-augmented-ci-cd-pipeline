@@ -98,7 +98,7 @@ direction that matters: `pass_rate` dropping, `test_duration_seconds` /
 `pipeline_duration_seconds` rising. Every flag comes with the mean, stdev,
 and z-score behind it, both as JSON and as a plain-English line (`summarize()`)
 so you're not stuck parsing JSON in a CI log. Won't flag anything until
-there's `min-history` (default 5) prior runs — not enough data to have an
+there's `min-history` (default 5) prior runs - not enough data to have an
 opinion yet, so it says so instead of guessing.
 
 **`scripts/seed_demo_history.py`** - generates the fake history under
@@ -188,10 +188,10 @@ curl localhost:8000/health
 
 ## Why bother with all this
 
-Regressions in CI usually get noticed late — after a few bad runs pile up,
+Regressions in CI usually get noticed late - after a few bad runs pile up,
 or someone mentions the build "feels slower" in standup. Keeping the run
 history as data instead of just logs means the pipeline can compare each
 run against its own recent baseline and catch a regression at the commit
 that caused it. Pairing that with an automatic rollback on failed health
 checks covers both failure modes here — the pipeline getting worse, and a
-bad build reaching deploy — without needing someone to notice first.
+bad build reaching deploy - without needing someone to notice first.
