@@ -28,17 +28,17 @@ the default `GITHUB_TOKEN`. None of this works until you flip a few settings
 on the actual GitHub repo (these can't be set from the workflow files
 themselves):
 
-1. **Settings → Actions → General → Workflow permissions** — select
+1. **Settings → Actions → General → Workflow permissions** - select
    "Read and write permissions." Without this, the bot-commit steps in
    `ci.yml`/`cd.yml` and the GHCR push in `cd.yml` will fail with a 403.
-2. **Settings → General → Features** — make sure **Issues** is enabled. The
+2. **Settings → General → Features** - make sure **Issues** is enabled. The
    gate job's `gh issue create` step needs it to file anomaly reports.
-3. **Branch protection on `main`** — if you have required-review rules on
+3. **Branch protection on `main`** - if you have required-review rules on
    `main`, the bot's direct `git push` (for history/deployment state) will be
    rejected. Either exclude the `pipeline-bot` commits from protection, or
    accept that those two specific files won't get committed until you relax
    that rule for them.
-4. **Packages** — the first push to GHCR (`ghcr.io/<owner>/<repo>`) creates
+4. **Packages** - the first push to GHCR (`ghcr.io/<owner>/<repo>`) creates
    the package automatically; no separate registry setup needed, but the
    package's visibility defaults to private and is linked to the repo.
 
@@ -83,16 +83,16 @@ pipeline_metrics/history.jsonl   (committed to repo, one line per run)
 a snapshot as of that build, not a live feed, but it means the deployed
 service can actually tell you something about the pipeline that shipped it.
 
-**`scripts/parse_test_results.py`** — turns a JUnit XML report into a single
+**`scripts/parse_test_results.py`** - turns a JUnit XML report into a single
 structured JSON record: pass rate, test duration, total pipeline wall-clock
 duration, commit SHA, branch, run ID.
 
-**`scripts/record_run_metrics.py`** — appends that record as one line to
+**`scripts/record_run_metrics.py`** - appends that record as one line to
 `pipeline_metrics/history.jsonl`. CI commits this file back to the repo after
 every push to `main`, so the history is versioned, diffable, and doesn't
 depend on an external time-series database.
 
-**`scripts/detect_anomalies.py`** — rolling mean/stdev baseline over the last
+**`scripts/detect_anomalies.py`** - rolling mean/stdev baseline over the last
 N runs (default 10), z-score threshold of 2.5 by default. Only checks the
 direction that matters: `pass_rate` dropping, `test_duration_seconds` /
 `pipeline_duration_seconds` rising. Every flag comes with the mean, stdev,
@@ -101,11 +101,11 @@ so you're not stuck parsing JSON in a CI log. Won't flag anything until
 there's `min-history` (default 5) prior runs — not enough data to have an
 opinion yet, so it says so instead of guessing.
 
-**`scripts/seed_demo_history.py`** — generates the fake history under
+**`scripts/seed_demo_history.py`** - generates the fake history under
 `examples/`. Not part of the pipeline itself, just here so the anomaly
 detector has something to show off without 15 real commits first.
 
-**`scripts/deploy.py`** — self-healing deploy. Starts the new container,
+**`scripts/deploy.py`** - self-healing deploy. Starts the new container,
 retries the health check with backoff (default: 5 attempts, 3s apart), and if
 it never comes up healthy, automatically redeploys the last known-good image
 tag (tracked in `deployment_state.json`, committed back to the repo the same
@@ -114,13 +114,13 @@ first-ever bad deploy fails cleanly instead of looping.
 
 ## Workflows
 
-**`.github/workflows/ci.yml`** — on every push/PR to `main`: install, lint
+**`.github/workflows/ci.yml`** - on every push/PR to `main`: install, lint
 (`flake8`), test (`pytest` with JUnit XML output), compute the run's metrics
 record, upload it as an artifact, and (push-to-main only) append it to
 `pipeline_metrics/history.jsonl` and commit that back with `[skip ci]` to
 avoid a commit loop.
 
-**`.github/workflows/cd.yml`** — triggered by `workflow_run` once CI succeeds
+**`.github/workflows/cd.yml`** - triggered by `workflow_run` once CI succeeds
 on `main` (guarantees CD only ever runs after a commit has passed CI). Both
 jobs check out `main` directly rather than pinning to the SHA that triggered
 CI: CI's own last step pushes a metrics commit on top of that SHA before CD
