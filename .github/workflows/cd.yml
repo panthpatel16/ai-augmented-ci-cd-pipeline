@@ -1,0 +1,123 @@
+name: CD
+
+# Triggered by workflow_run so this only fires after CI is green on main.
+#
+# NOTE: both jobs check out `main`, not github.event.workflow_run.head_sha.
+# head_sha is the commit CI tested, but CI's last step pushes a bot commit
+# on top of it (the metrics-history row for this run) before this workflow
+# even starts. Checking out head_sha here would make the gate read history
+# that's missing its own run, and would make deploy's git push at the end
+# get rejected as non-fast-forward. main is always the safer checkout by
+# the time workflow_run fires - learned this one the hard way.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  SHA: ${{ github.event.workflow_run.head_sha }}
+
+jobs:
+  # AIOps gate: block the deploy if the run history shows the pipeline is
+  # regressing (falling pass rate or ballooning build time), rather than
+  # shipping on top of a known-bad trend. See scripts/detect_anomalies.py.
+  gate:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check pipeline health
+        id: check
+        run: |
+          set +e
+          python scripts/detect_anomalies.py \
+            --history pipeline_metrics/history.jsonl \
+            --output anomaly-report.json
+          code=$?
+          set -e
+          echo "proceed=$([ "$code" -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload anomaly report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anomaly-report
+          path: |
+            anomaly-report.json
+            anomaly-report.txt
+
+      - name: File issue documenting the anomaly
+        if: steps.check.outputs.proceed == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # gh issue create fails outright if the label doesn't exist yet, and a
+          # fresh repo won't have it - create it first, ignore if it's already there.
+          gh label create "pipeline-anomaly" --color "B60205" \
+            --description "Flagged by scripts/detect_anomalies.py" 2>/dev/null || true
+          gh issue create \
+            --title "Pipeline anomaly at ${SHA::7} — deploy blocked" \
+            --body-file anomaly-report.txt \
+            --label "pipeline-anomaly"
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.SHA }}
+            ${{ env.IMAGE }}:latest
+
+      - name: Deploy with self-healing retry + rollback
+        run: |
+          python scripts/deploy.py --image "${{ env.IMAGE }}" --tag "${{ env.SHA }}"
+
+      - name: Commit deployment state
+        if: always()
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "pipeline-bot@users.noreply.github.com"
+          git add deployment_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(deploy): update deployment state for ${SHA::7} [skip ci]"
+            git push
+          else
+            echo "No deployment state change to commit"
+          fi

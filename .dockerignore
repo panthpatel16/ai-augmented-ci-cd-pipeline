@@ -1,0 +1,13 @@
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+tests/
+scripts/
+test-results.xml
+pipeline-run-metrics.json
+.venv
+venv
+requirements-dev.txt
+README.md

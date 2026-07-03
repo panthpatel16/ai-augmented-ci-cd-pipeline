@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-07-03T01:57:41.058565+00:00",
+  "commit_sha": "local",
+  "branch": "local",
+  "run_id": "local",
+  "run_attempt": "1",
+  "actor": "local",
+  "tests_total": 37,
+  "tests_passed": 37,
+  "tests_failed": 0,
+  "tests_errored": 0,
+  "tests_skipped": 0,
+  "pass_rate": 1.0,
+  "test_duration_seconds": 9.97,
+  "pipeline_duration_seconds": null
+}

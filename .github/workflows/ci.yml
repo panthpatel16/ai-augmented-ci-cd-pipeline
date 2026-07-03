@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record pipeline start time
+        run: echo "PIPELINE_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: flake8 app tests scripts
+
+      - name: Run tests
+        run: |
+          pytest --junitxml=test-results.xml \
+            --cov=app --cov=scripts \
+            --cov-report=term-missing --cov-report=xml
+
+      - name: Compute pipeline metrics
+        if: always()
+        run: |
+          if [ ! -f test-results.xml ]; then
+            echo "test-results.xml not found (an earlier step, e.g. lint, likely failed before tests ran) — skipping metrics."
+            exit 0
+          fi
+          python scripts/parse_test_results.py \
+            --junit-xml test-results.xml \
+            --start-time "$PIPELINE_START" \
+            --output pipeline-run-metrics.json
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+      - name: Upload pipeline metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-metrics
+          path: pipeline-run-metrics.json
+
+      # Only append/commit history on pushes to main (not PRs), so history
+      # reflects the mainline and forked/untrusted PRs can't write to it.
+      - name: Append run metrics to history
+        if: always() && github.event_name == 'push'
+        run: |
+          if [ ! -f pipeline-run-metrics.json ]; then
+            echo "pipeline-run-metrics.json not found — nothing to append."
+            exit 0
+          fi
+          python scripts/record_run_metrics.py \
+            --record pipeline-run-metrics.json \
+            --history pipeline_metrics/history.jsonl
+
+      - name: Commit updated metrics history
+        if: always() && github.event_name == 'push'
+        run: |
+          git config user.name "pipeline-bot"
+          git config user.email "pipeline-bot@users.noreply.github.com"
+          git add pipeline_metrics/history.jsonl
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(metrics): record pipeline run ${{ github.sha }} [skip ci]"
+            git push
+          else
+            echo "No metrics change to commit"
+          fi
