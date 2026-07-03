@@ -132,9 +132,9 @@ fail as a non-fast-forward.
    it creates the `pipeline-anomaly` label if it doesn't exist yet (a fresh
    repo won't have it, and `gh issue create --label` just fails otherwise),
    then files an issue with the plain-English summary as the body. `deploy`
-   is skipped entirely — no bad build ships on top of a regressing trend.
+   is skipped entirely - no bad build ships on top of a regressing trend.
 2. `deploy` job builds the Docker image, pushes it to GHCR tagged with both
-   the commit SHA and `latest` (the SHA is still the exact commit CI tested —
+   the commit SHA and `latest` (the SHA is still the exact commit CI tested -
    only the branch ref used for checkout changed, not what gets built), then
    runs `deploy.py` to bring it up with the retry/rollback behavior described
    above.
@@ -193,5 +193,5 @@ or someone mentions the build "feels slower" in standup. Keeping the run
 history as data instead of just logs means the pipeline can compare each
 run against its own recent baseline and catch a regression at the commit
 that caused it. Pairing that with an automatic rollback on failed health
-checks covers both failure modes here — the pipeline getting worse, and a
+checks covers both failure modes here - the pipeline getting worse, and a
 bad build reaching deploy - without needing someone to notice first.
